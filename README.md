@@ -56,13 +56,22 @@ A single device with these entities:
 6. **v2 candidate**: solar surplus would cover the bump to v2 → v2.
 7. **Default** → v1.
 
-"Solar surplus covers the bump" is computed from the configured grid power
-sensor:
+"Solar surplus covers the bump" is computed from a **smoothed** grid power
+reading (EMA, alpha=0.3 — about 5 minutes for a step change to fully
+register, so a 30–60 s cloud is invisible to the brain):
 
 ```
-expected_grid_after_bump = grid_now + (target_W − current_W)
+expected_grid_after_bump = smoothed_grid + (target_W − current_W)
 allowed only if expected_grid_after_bump < −safety_margin_w
 ```
+
+In addition, **v2 also requires a "warm enough" gate** — same as v3 — so a
+chilly day with surplus stays at v1 instead of dumping the surplus into
+sustained v2 with no filtration upside.
+
+A **min-dwell rate limit** (60 s by default) prevents two speed changes
+within a minute of each other. Manual mode and the force-skim button
+bypass it.
 
 ## Config flow
 

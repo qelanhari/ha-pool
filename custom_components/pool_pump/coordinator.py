@@ -24,7 +24,9 @@ from .const import (
     CONF_WATER_TEMP_ENTITY,
     CONF_WATER_WARM_C,
     DEFAULT_AIR_WARM_C,
+    DEFAULT_MIN_SPEED_DWELL_SECONDS,
     DEFAULT_SAFETY_MARGIN_W,
+    DEFAULT_SOLAR_SMOOTH_ALPHA,
     DEFAULT_V3_COOLDOWN_MINUTES,
     DEFAULT_V3_MAX_MINUTES,
     DEFAULT_WATER_WARM_C,
@@ -67,6 +69,12 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_decision: Decision = Decision(
             target_speed=1, reason="initial", enter_v3=False, leave_v3=False
         )
+
+        # Anti-flap state.
+        # _grid_smooth = EMA of the grid sensor; on first tick we seed it
+        # from the live reading so we don't start at 0 and drift up.
+        self._grid_smooth: float | None = None
+        self._last_speed_change_at: datetime | None = None
 
     # --- Properties exposed to entity classes --------------------------------
 
@@ -192,10 +200,19 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         pump_id = self._entity(CONF_PUMP_SPEED_ENTITY)
-        grid = self._get_float(self._entity(CONF_GRID_POWER_ENTITY)) or 0.0
+        grid_raw = self._get_float(self._entity(CONF_GRID_POWER_ENTITY)) or 0.0
         water = self._get_float(self._entity(CONF_WATER_TEMP_ENTITY))
         air = self._get_float(self._entity(CONF_AIR_TEMP_ENTITY))
         pump_speed = self._get_int(pump_id, default=0)
+
+        # EMA smoothing on the grid sensor so a passing cloud (~30–60 s) doesn't
+        # flap the speed. First tick seeds from the live value (no smoothing
+        # offset). Manual mode also bypasses smoothing (it ignores grid anyway).
+        alpha = DEFAULT_SOLAR_SMOOTH_ALPHA
+        if self._grid_smooth is None:
+            self._grid_smooth = grid_raw
+        else:
+            self._grid_smooth = alpha * grid_raw + (1.0 - alpha) * self._grid_smooth
 
         sun_state = self.hass.states.get(SUN_ENTITY)
         daylight = sun_state is not None and sun_state.state == "above_horizon"
@@ -204,10 +221,11 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Consume the one-shot flag the moment we evaluate it.
         self._force_skim_pending = False
 
+        now = datetime.now(timezone.utc)
         inputs = Inputs(
-            now=datetime.now(timezone.utc),
+            now=now,
             daylight=daylight,
-            grid_w=grid,
+            grid_w=self._grid_smooth,
             pump_speed=pump_speed,
             water_temp_c=water,
             air_temp_c=air,
@@ -223,29 +241,46 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Stamp v3 lifecycle timestamps.
         state_changed = False
         if decision.enter_v3:
-            self._v3_started_at = inputs.now
+            self._v3_started_at = now
             state_changed = True
             _LOGGER.info("Pool pump: entering v3 session — %s", decision.reason)
         if decision.leave_v3:
-            self._v3_last_ended_at = inputs.now
+            self._v3_last_ended_at = now
             self._v3_started_at = None
             state_changed = True
             _LOGGER.info("Pool pump: leaving v3 session — %s", decision.reason)
         if state_changed:
             await self._save_state()
 
-        # Apply target speed if it differs from current.
+        # Apply target speed if it differs from current — subject to the
+        # min-dwell rate limit. Manual mode and the force-skim button bypass.
         if pump_id and decision.target_speed != pump_speed:
-            _LOGGER.info(
-                "Pool pump: %d → %d (%s)",
-                pump_speed, decision.target_speed, decision.reason,
+            bypass = self._mode != MODE_AUTO or force_skim
+            elapsed = (
+                (now - self._last_speed_change_at).total_seconds()
+                if self._last_speed_change_at
+                else float("inf")
             )
-            await self.hass.services.async_call(
-                "number",
-                "set_value",
-                {"entity_id": pump_id, "value": float(decision.target_speed)},
-                blocking=True,
-            )
+            if bypass or elapsed >= DEFAULT_MIN_SPEED_DWELL_SECONDS:
+                _LOGGER.info(
+                    "Pool pump: %d → %d (%s) | grid_raw=%.0fW grid_smooth=%.0fW",
+                    pump_speed, decision.target_speed, decision.reason,
+                    grid_raw, self._grid_smooth,
+                )
+                await self.hass.services.async_call(
+                    "number",
+                    "set_value",
+                    {"entity_id": pump_id, "value": float(decision.target_speed)},
+                    blocking=True,
+                )
+                self._last_speed_change_at = now
+            else:
+                _LOGGER.debug(
+                    "Pool pump: rate-limited (%.0fs < %ds), holding at v%d "
+                    "(wanted v%d, %s)",
+                    elapsed, DEFAULT_MIN_SPEED_DWELL_SECONDS,
+                    pump_speed, decision.target_speed, decision.reason,
+                )
 
         return self._build_data(inputs, decision)
 
@@ -267,6 +302,9 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "reason": decision.reason,
             "v3_session_age_s": v3_age_s,
             "v3_cooldown_remaining_s": cooldown_s,
+            "grid_smooth_w": (
+                round(self._grid_smooth, 0) if self._grid_smooth is not None else None
+            ),
         }
 
 

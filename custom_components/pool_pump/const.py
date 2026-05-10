@@ -32,6 +32,16 @@ DEFAULT_V3_COOLDOWN_MINUTES = 30
 # Coordinator update cadence (between reactive triggers)
 UPDATE_INTERVAL_SECONDS = 30
 
+# Anti-flap defaults: smoothing and rate limiting on speed changes.
+# - SOLAR_SMOOTH_ALPHA is the EMA weight on the latest reading. Lower = more
+#   smoothing. 0.3 makes a step change reach ~95% within ~10 ticks (~5 min).
+#   Cloud passes (30–60 s) barely move the smoothed value, so the brain
+#   doesn't see them as "surplus disappeared".
+# - MIN_SPEED_DWELL_SECONDS bars consecutive speed changes from happening
+#   faster than this. Manual mode and the force-skim button bypass it.
+DEFAULT_SOLAR_SMOOTH_ALPHA = 0.3
+DEFAULT_MIN_SPEED_DWELL_SECONDS = 60
+
 # Mode constants — re-exported from decision for entity layer
 from .decision import (  # noqa: E402  (placement after other constants on purpose)
     MODE_AUTO,

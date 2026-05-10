@@ -117,8 +117,8 @@ class TestV3Candidate:
             thr,
         )
         # Surplus exists but neither water nor air is warm enough.
-        # Should fall back to v2 (still has surplus for that).
-        assert d.target_speed == 2
+        # v2 ALSO requires warmth, so we fall all the way back to v1.
+        assert d.target_speed == 1
 
     def test_no_v3_if_in_cooldown(self, base_inputs, thr):
         # 15 min cooldown still active (default cooldown is 30 min).
@@ -214,8 +214,17 @@ class TestV3InProgress:
 class TestV2Candidate:
     def test_v2_with_modest_surplus(self, base_inputs, thr):
         # At v1 (160W). Bump to v2 (500W) adds 340W. Need grid + 340 < -200 → grid < -540.
-        d = decide(replace(base_inputs, grid_w=-700.0), thr)
+        # v2 also requires warmth — provide a warm water_temp.
+        d = decide(replace(base_inputs, grid_w=-700.0, water_temp_c=26.0), thr)
         assert d.target_speed == 2
+
+    def test_no_v2_if_surplus_but_cool(self, base_inputs, thr):
+        """When the day is cool, even with surplus we stay at v1 (no filtration urgency)."""
+        d = decide(
+            replace(base_inputs, grid_w=-700.0, water_temp_c=20.0, air_temp_c=20.0),
+            thr,
+        )
+        assert d.target_speed == 1
 
     def test_v2_drops_to_v1_when_surplus_disappears(self, base_inputs, thr):
         # At v2 (500W). Bump to v2 itself = no delta. Need grid < -200 to stay.
@@ -287,9 +296,9 @@ class TestMissingTemps:
             ),
             thr,
         )
-        # No "warm" signal possible, so v3 candidate is blocked. Surplus
-        # still allows v2.
-        assert d.target_speed == 2
+        # No "warm" signal possible, so neither v3 nor v2 candidate fires.
+        # Falls all the way back to v1.
+        assert d.target_speed == 1
 
     def test_one_warm_temp_is_enough(self, base_inputs, thr):
         d = decide(

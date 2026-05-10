@@ -171,11 +171,12 @@ def decide(i: Inputs, thr: Thresholds) -> Decision:
             leave_v3=False,
         )
 
-    # 6. v2 candidate — surplus covers v2 bump.
-    if _can_bump_to(2, i, thr):
+    # 6. v2 candidate — surplus covers v2 bump AND it's warm enough to justify it.
+    #    v2 is sustained-flow, so we only run it when extra filtration is useful.
+    if _can_bump_to(2, i, thr) and _warm_enough(i, thr):
         return Decision(
             target_speed=2,
-            reason="solar surplus covers v2 → v2",
+            reason="solar surplus covers v2 + warm → v2",
             enter_v3=False,
             leave_v3=was_v3,
         )
@@ -190,7 +191,11 @@ def decide(i: Inputs, thr: Thresholds) -> Decision:
 
 
 def _best_sustainable_speed(i: Inputs, thr: Thresholds) -> int:
-    """When dropping out of v3, pick the highest still-affordable speed."""
-    if _can_bump_to(2, i, thr):
+    """When dropping out of v3, pick the highest still-affordable speed.
+
+    v2 also requires warmth — same gate as the candidate path — so we don't
+    leave the pump at v2 with no filtration justification.
+    """
+    if _can_bump_to(2, i, thr) and _warm_enough(i, thr):
         return 2
     return 1
