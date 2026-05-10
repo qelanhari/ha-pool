@@ -1,0 +1,76 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pool Pump — entities",
+        "description": "Pick the pump speed control and the sensors the brain will read.",
+        "data": {
+          "name": "Name",
+          "pump_speed_entity": "Pump speed (number entity, 0–3)",
+          "grid_power_entity": "Grid power sensor (negative = exporting solar)",
+          "water_temp_entity": "Water temperature sensor (optional)",
+          "air_temp_entity": "Air temperature sensor (optional)"
+        }
+      },
+      "thresholds": {
+        "title": "Pool Pump — thresholds",
+        "description": "Surplus safety margin and warm-water/air gates that justify a boost.",
+        "data": {
+          "safety_margin_w": "Solar safety margin (W)",
+          "water_warm_c": "Warm water threshold (°C)",
+          "air_warm_c": "Warm air threshold (°C)"
+        }
+      },
+      "v3_limits": {
+        "title": "Pool Pump — v3 skim session limits",
+        "description": "Hard cap and cooldown for v3 (the high-flow skim speed). Filter-friendly defaults: 15 min cap, 30 min cooldown.",
+        "data": {
+          "v3_max_minutes": "Max v3 session (minutes)",
+          "v3_cooldown_minutes": "Cooldown between v3 sessions (minutes)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "thresholds": {
+        "title": "Pool Pump — thresholds",
+        "data": {
+          "safety_margin_w": "Solar safety margin (W)",
+          "water_warm_c": "Warm water threshold (°C)",
+          "air_warm_c": "Warm air threshold (°C)"
+        }
+      },
+      "v3_limits": {
+        "title": "Pool Pump — v3 limits",
+        "data": {
+          "v3_max_minutes": "Max v3 session (minutes)",
+          "v3_cooldown_minutes": "Cooldown between v3 sessions (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "auto": "Auto",
+          "off": "Off",
+          "v1": "v1 (low)",
+          "v2": "v2 (medium)",
+          "v3": "v3 (high — skim)"
+        }
+      }
+    },
+    "sensor": {
+      "target_speed": { "name": "Target speed" },
+      "decision_reason": { "name": "Decision reason" },
+      "v3_session_age": { "name": "v3 session age" },
+      "v3_cooldown_remaining": { "name": "v3 cooldown remaining" }
+    },
+    "button": {
+      "force_skim": { "name": "Force skim now" }
+    }
+  }
+}

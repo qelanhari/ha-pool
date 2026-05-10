@@ -1,0 +1,76 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pompe Piscine — entités",
+        "description": "Sélectionnez l'entité contrôlant la vitesse de la pompe et les capteurs lus par le cerveau.",
+        "data": {
+          "name": "Nom",
+          "pump_speed_entity": "Vitesse de la pompe (entité number, 0–3)",
+          "grid_power_entity": "Capteur réseau (négatif = export solaire)",
+          "water_temp_entity": "Température de l'eau (optionnel)",
+          "air_temp_entity": "Température de l'air (optionnel)"
+        }
+      },
+      "thresholds": {
+        "title": "Pompe Piscine — seuils",
+        "description": "Marge de sécurité solaire et seuils eau/air qui justifient un boost.",
+        "data": {
+          "safety_margin_w": "Marge de sécurité solaire (W)",
+          "water_warm_c": "Seuil eau chaude (°C)",
+          "air_warm_c": "Seuil air chaud (°C)"
+        }
+      },
+      "v3_limits": {
+        "title": "Pompe Piscine — limites session v3",
+        "description": "Plafond et cooldown pour la v3 (haut débit, skimming). Recommandé : 15 min max, 30 min de cooldown.",
+        "data": {
+          "v3_max_minutes": "Durée max session v3 (minutes)",
+          "v3_cooldown_minutes": "Cooldown entre sessions v3 (minutes)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "thresholds": {
+        "title": "Pompe Piscine — seuils",
+        "data": {
+          "safety_margin_w": "Marge de sécurité solaire (W)",
+          "water_warm_c": "Seuil eau chaude (°C)",
+          "air_warm_c": "Seuil air chaud (°C)"
+        }
+      },
+      "v3_limits": {
+        "title": "Pompe Piscine — limites v3",
+        "data": {
+          "v3_max_minutes": "Durée max session v3 (minutes)",
+          "v3_cooldown_minutes": "Cooldown entre sessions v3 (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "auto": "Auto",
+          "off": "Arrêt",
+          "v1": "v1 (basse)",
+          "v2": "v2 (moyenne)",
+          "v3": "v3 (haute — skim)"
+        }
+      }
+    },
+    "sensor": {
+      "target_speed": { "name": "Vitesse cible" },
+      "decision_reason": { "name": "Raison de la décision" },
+      "v3_session_age": { "name": "Durée session v3" },
+      "v3_cooldown_remaining": { "name": "Cooldown v3 restant" }
+    },
+    "button": {
+      "force_skim": { "name": "Lancer un skim" }
+    }
+  }
+}
