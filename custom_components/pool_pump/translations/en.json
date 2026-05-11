@@ -9,7 +9,8 @@
           "pump_speed_entity": "Pump speed (number entity, 0–3)",
           "grid_power_entity": "Grid power sensor (negative = exporting solar)",
           "water_temp_entity": "Water temperature sensor (optional)",
-          "air_temp_entity": "Air temperature sensor (optional)"
+          "air_temp_entity": "Air temperature sensor (optional)",
+          "tempo_entity": "Tempo color sensor (optional, e.g. RTE Tempo — used by winter mode to force off on Red days)"
         }
       },
       "thresholds": {
@@ -55,7 +56,8 @@
       "mode": {
         "name": "Mode",
         "state": {
-          "auto": "Auto",
+          "auto": "Auto (summer)",
+          "winter": "Winter (solar-only)",
           "off": "Off",
           "v1": "v1 (low)",
           "v2": "v2 (medium)",

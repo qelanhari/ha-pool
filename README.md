@@ -21,8 +21,10 @@ respect the CS100 sand filter's flow tolerance.
 
 A single device with these entities:
 
-- `select.pool_pump_mode` — `auto / off / v1 / v2 / v3`. Auto runs the brain;
-  the others are manual overrides.
+- `select.pool_pump_mode` — `auto / winter / off / v1 / v2 / v3`. `auto`
+  runs the summer brain (warmth-gated boost). `winter` runs the cold-season
+  brain (solar-only, capped at v1, force-off on Tempo Red days). The
+  others are manual overrides.
 - `sensor.pool_pump_target_speed` — current target (0..3) the brain wants.
 - `sensor.pool_pump_decision_reason` — human-readable text explaining the
   current decision (e.g. *"solar surplus covers v3 + warm → v3 skim session"*).
@@ -72,6 +74,21 @@ sustained v2 with no filtration upside.
 A **min-dwell rate limit** (60 s by default) prevents two speed changes
 within a minute of each other. Manual mode and the force-skim button
 bypass it.
+
+### Winter mode
+
+When `select.pool_pump_mode = winter`:
+
+1. If the optional Tempo color sensor reads `Rouge` → pump is **off** for
+   the whole day (cheapest is no consumption).
+2. Otherwise at night → **off**.
+3. Otherwise if smoothed solar surplus covers the bump from current speed
+   up to v1 (need `grid + 160W - current_W < −safety_margin`) → **v1**.
+4. Otherwise → **off**.
+
+Winter mode never exceeds v1 even with huge surplus — the cold-season
+filtration target is "circulate when free, sit still when not". The
+force-skim button is ignored in winter mode.
 
 ## Config flow
 

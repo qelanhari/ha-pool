@@ -11,6 +11,8 @@ from decision import (  # type: ignore[import-not-found]
     MODE_V1,
     MODE_V2,
     MODE_V3,
+    MODE_WINTER,
+    TEMPO_RED,
     Decision,
     Inputs,
     decide,
@@ -283,6 +285,103 @@ class TestForceSkim:
 # ---------------------------------------------------------------------------
 # Edge cases on missing temps
 # ---------------------------------------------------------------------------
+
+
+class TestWinterMode:
+    def test_tempo_red_forces_off(self, base_inputs, thr):
+        d = decide(
+            replace(
+                base_inputs,
+                mode=MODE_WINTER,
+                tempo_color=TEMPO_RED,
+                grid_w=-3000.0,   # huge surplus, irrelevant
+            ),
+            thr,
+        )
+        assert d.target_speed == 0
+        assert "Tempo Red" in d.reason
+
+    def test_night_forces_off(self, base_inputs, thr):
+        d = decide(
+            replace(
+                base_inputs,
+                mode=MODE_WINTER,
+                daylight=False,
+                grid_w=-3000.0,
+            ),
+            thr,
+        )
+        assert d.target_speed == 0
+        assert "night" in d.reason
+
+    def test_v1_when_solar_covers(self, base_inputs, thr):
+        # From off (0W). Bump to v1 adds 160W. grid + 160 < -200 → grid < -360.
+        d = decide(
+            replace(
+                base_inputs,
+                mode=MODE_WINTER,
+                pump_speed=0,
+                grid_w=-500.0,    # comfortably enough surplus
+            ),
+            thr,
+        )
+        assert d.target_speed == 1
+        assert "solar" in d.reason
+
+    def test_off_when_no_solar(self, base_inputs, thr):
+        d = decide(
+            replace(
+                base_inputs,
+                mode=MODE_WINTER,
+                pump_speed=0,
+                grid_w=200.0,     # importing
+            ),
+            thr,
+        )
+        assert d.target_speed == 0
+        assert "insufficient" in d.reason
+
+    def test_winter_caps_at_v1_even_with_huge_surplus(self, base_inputs, thr):
+        d = decide(
+            replace(
+                base_inputs,
+                mode=MODE_WINTER,
+                pump_speed=1,
+                grid_w=-3000.0,   # plenty for v3, but winter caps at v1
+                water_temp_c=26.0,
+                air_temp_c=30.0,
+            ),
+            thr,
+        )
+        assert d.target_speed == 1
+
+    def test_winter_drops_v3_to_off_via_tempo(self, base_inputs, thr):
+        """If we land in winter mode while at v3, we should leave the session cleanly."""
+        d = decide(
+            replace(
+                base_inputs,
+                mode=MODE_WINTER,
+                pump_speed=3,
+                tempo_color=TEMPO_RED,
+                v3_started_at=base_inputs.now,
+            ),
+            thr,
+        )
+        assert d.target_speed == 0
+        assert d.leave_v3 is True
+
+    def test_winter_ignores_force_skim(self, base_inputs, thr):
+        """Force-skim is a summer-only concept; winter ignores it."""
+        d = decide(
+            replace(
+                base_inputs,
+                mode=MODE_WINTER,
+                grid_w=-3000.0,
+                force_skim_requested=True,
+            ),
+            thr,
+        )
+        assert d.target_speed == 1   # at most v1 in winter
 
 
 class TestMissingTemps:

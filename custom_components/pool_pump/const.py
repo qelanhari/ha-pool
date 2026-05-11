@@ -12,6 +12,7 @@ CONF_PUMP_SPEED_ENTITY = "pump_speed_entity"
 CONF_GRID_POWER_ENTITY = "grid_power_entity"
 CONF_WATER_TEMP_ENTITY = "water_temp_entity"
 CONF_AIR_TEMP_ENTITY = "air_temp_entity"
+CONF_TEMPO_ENTITY = "tempo_entity"          # optional: RTE Tempo color sensor
 
 # Config keys — Step 2: thresholds
 CONF_SAFETY_MARGIN_W = "safety_margin_w"
@@ -49,6 +50,7 @@ from .decision import (  # noqa: E402  (placement after other constants on purpo
     MODE_V1,
     MODE_V2,
     MODE_V3,
+    MODE_WINTER,
     MODES,
     PUMP_W,
 )
@@ -60,6 +62,7 @@ __all__ = [
     "CONF_GRID_POWER_ENTITY",
     "CONF_WATER_TEMP_ENTITY",
     "CONF_AIR_TEMP_ENTITY",
+    "CONF_TEMPO_ENTITY",
     "CONF_SAFETY_MARGIN_W",
     "CONF_WATER_WARM_C",
     "CONF_AIR_WARM_C",
@@ -76,6 +79,7 @@ __all__ = [
     "MODE_V1",
     "MODE_V2",
     "MODE_V3",
+    "MODE_WINTER",
     "MODES",
     "PUMP_W",
 ]

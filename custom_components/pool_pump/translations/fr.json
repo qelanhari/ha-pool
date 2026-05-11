@@ -9,7 +9,8 @@
           "pump_speed_entity": "Vitesse de la pompe (entité number, 0–3)",
           "grid_power_entity": "Capteur réseau (négatif = export solaire)",
           "water_temp_entity": "Température de l'eau (optionnel)",
-          "air_temp_entity": "Température de l'air (optionnel)"
+          "air_temp_entity": "Température de l'air (optionnel)",
+          "tempo_entity": "Capteur couleur Tempo (optionnel, ex. RTE Tempo — le mode hiver force l'arrêt les jours Rouges)"
         }
       },
       "thresholds": {
@@ -55,7 +56,8 @@
       "mode": {
         "name": "Mode",
         "state": {
-          "auto": "Auto",
+          "auto": "Auto (été)",
+          "winter": "Hiver (solaire uniquement)",
           "off": "Arrêt",
           "v1": "v1 (basse)",
           "v2": "v2 (moyenne)",

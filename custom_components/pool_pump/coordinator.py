@@ -19,6 +19,7 @@ from .const import (
     CONF_GRID_POWER_ENTITY,
     CONF_PUMP_SPEED_ENTITY,
     CONF_SAFETY_MARGIN_W,
+    CONF_TEMPO_ENTITY,
     CONF_V3_COOLDOWN_MINUTES,
     CONF_V3_MAX_MINUTES,
     CONF_WATER_TEMP_ENTITY,
@@ -134,6 +135,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._entity(CONF_GRID_POWER_ENTITY),
             self._entity(CONF_WATER_TEMP_ENTITY),
             self._entity(CONF_AIR_TEMP_ENTITY),
+            self._entity(CONF_TEMPO_ENTITY),
         ]
         watched = [e for e in watched if e]
         if watched:
@@ -205,6 +207,13 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         air = self._get_float(self._entity(CONF_AIR_TEMP_ENTITY))
         pump_speed = self._get_int(pump_id, default=0)
 
+        tempo_entity = self._entity(CONF_TEMPO_ENTITY)
+        tempo_color: str | None = None
+        if tempo_entity:
+            t_state = self.hass.states.get(tempo_entity)
+            if t_state and t_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                tempo_color = t_state.state
+
         # EMA smoothing on the grid sensor so a passing cloud (~30–60 s) doesn't
         # flap the speed. First tick seeds from the live value (no smoothing
         # offset). Manual mode also bypasses smoothing (it ignores grid anyway).
@@ -233,6 +242,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             v3_started_at=self._v3_started_at,
             v3_last_ended_at=self._v3_last_ended_at,
             force_skim_requested=force_skim,
+            tempo_color=tempo_color,
         )
 
         decision = decide(inputs, self.thresholds)

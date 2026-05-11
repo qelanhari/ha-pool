@@ -14,12 +14,24 @@ from datetime import datetime, timedelta
 PUMP_W: dict[int, int] = {0: 0, 1: 160, 2: 500, 3: 1100}
 
 MODE_AUTO = "auto"
+MODE_WINTER = "winter"
 MODE_OFF = "off"
 MODE_V1 = "v1"
 MODE_V2 = "v2"
 MODE_V3 = "v3"
-MODES: tuple[str, ...] = (MODE_AUTO, MODE_OFF, MODE_V1, MODE_V2, MODE_V3)
+MODES: tuple[str, ...] = (
+    MODE_AUTO,
+    MODE_WINTER,
+    MODE_OFF,
+    MODE_V1,
+    MODE_V2,
+    MODE_V3,
+)
 MANUAL_TO_SPEED: dict[str, int] = {MODE_OFF: 0, MODE_V1: 1, MODE_V2: 2, MODE_V3: 3}
+
+# Tempo (RTE) color values. The integration matches `Rouge` exactly to force
+# the pump off for the whole Red day; other values are pass-through.
+TEMPO_RED = "Rouge"
 
 
 @dataclass(frozen=True)
@@ -35,10 +47,11 @@ class Inputs:
     pump_speed: int                     # 0..3 — what the pump is set to right now
     water_temp_c: float | None
     air_temp_c: float | None
-    mode: str                           # "auto" | "off" | "v1" | "v2" | "v3"
+    mode: str                           # "auto" | "winter" | "off" | "v1" | "v2" | "v3"
     v3_started_at: datetime | None      # when current/last v3 session started
     v3_last_ended_at: datetime | None   # when previous v3 session ended
     force_skim_requested: bool = False  # one-shot flag from the button entity
+    tempo_color: str | None = None      # "Rouge" / "Blanc" / "Bleu" / None if unread
 
 
 @dataclass(frozen=True)
@@ -99,7 +112,38 @@ def decide(i: Inputs, thr: Thresholds) -> Decision:
     """Map (Inputs, Thresholds) to a Decision. Pure, deterministic."""
     was_v3 = i.pump_speed == 3
 
-    # 1. Manual mode is sovereign.
+    # 1a. Winter mode: solar-only operation, capped at v1, force-off on Tempo Red.
+    if i.mode == MODE_WINTER:
+        if i.tempo_color == TEMPO_RED:
+            return Decision(
+                target_speed=0,
+                reason="winter: Tempo Red day → off",
+                enter_v3=False,
+                leave_v3=was_v3,
+            )
+        if not i.daylight:
+            return Decision(
+                target_speed=0,
+                reason="winter: night → off",
+                enter_v3=False,
+                leave_v3=was_v3,
+            )
+        # Solar covers the bump from current speed up to v1?
+        if _can_bump_to(1, i, thr):
+            return Decision(
+                target_speed=1,
+                reason="winter: solar surplus covers v1 → on",
+                enter_v3=False,
+                leave_v3=was_v3,
+            )
+        return Decision(
+            target_speed=0,
+            reason="winter: insufficient solar → off",
+            enter_v3=False,
+            leave_v3=was_v3,
+        )
+
+    # 1b. Manual mode is sovereign (off / v1 / v2 / v3).
     if i.mode != MODE_AUTO:
         target = MANUAL_TO_SPEED.get(i.mode, 1)
         leaving_v3 = was_v3 and target != 3

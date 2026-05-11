@@ -25,6 +25,7 @@ from .const import (
     CONF_GRID_POWER_ENTITY,
     CONF_PUMP_SPEED_ENTITY,
     CONF_SAFETY_MARGIN_W,
+    CONF_TEMPO_ENTITY,
     CONF_V3_COOLDOWN_MINUTES,
     CONF_V3_MAX_MINUTES,
     CONF_WATER_TEMP_ENTITY,
@@ -53,6 +54,9 @@ def _entity_schema() -> vol.Schema:
             ),
             vol.Optional(CONF_AIR_TEMP_ENTITY): EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="temperature")
+            ),
+            vol.Optional(CONF_TEMPO_ENTITY): EntitySelector(
+                EntitySelectorConfig(domain="sensor")
             ),
         }
     )
