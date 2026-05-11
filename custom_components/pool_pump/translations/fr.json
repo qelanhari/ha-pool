@@ -48,6 +48,15 @@
           "v3_max_minutes": "Durée max session v3 (minutes)",
           "v3_cooldown_minutes": "Cooldown entre sessions v3 (minutes)"
         }
+      },
+      "advanced": {
+        "title": "Pompe Piscine — avancé",
+        "description": "Anti-flap et capteur Tempo optionnel pour le mode hiver.",
+        "data": {
+          "solar_smooth_alpha": "Alpha EMA réseau (plus bas = plus de lissage)",
+          "min_speed_dwell_seconds": "Temps min entre changements de vitesse (s)",
+          "tempo_entity": "Capteur couleur Tempo (mode hiver — arrêt jours Rouges ; vide pour désactiver)"
+        }
       }
     }
   },
@@ -69,10 +78,12 @@
       "target_speed": { "name": "Vitesse cible" },
       "decision_reason": { "name": "Raison de la décision" },
       "v3_session_age": { "name": "Durée session v3" },
-      "v3_cooldown_remaining": { "name": "Cooldown v3 restant" }
+      "v3_cooldown_remaining": { "name": "Cooldown v3 restant" },
+      "grid_smooth": { "name": "Réseau (lissé)" }
     },
     "button": {
-      "force_skim": { "name": "Lancer un skim" }
+      "force_skim": { "name": "Lancer un skim" },
+      "reset_v3_cooldown": { "name": "Réinitialiser cooldown v3" }
     }
   }
 }

@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTime
+from homeassistant.const import UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
@@ -29,6 +33,7 @@ async def async_setup_entry(
             PoolPumpReasonSensor(coordinator, entry),
             PoolPumpV3SessionAgeSensor(coordinator, entry),
             PoolPumpV3CooldownSensor(coordinator, entry),
+            PoolPumpGridSmoothSensor(coordinator, entry),
         ]
     )
 
@@ -112,3 +117,23 @@ class PoolPumpV3CooldownSensor(_Base):
     def native_value(self) -> int | None:
         data = self.coordinator.data
         return data.get("v3_cooldown_remaining_s") if data else None
+
+
+class PoolPumpGridSmoothSensor(_Base):
+    """The EMA-smoothed grid power that the brain actually decides against."""
+
+    _attr_translation_key = "grid_smooth"
+    _attr_icon = "mdi:transmission-tower"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_grid_smooth"
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        return data.get("grid_smooth_w") if data else None

@@ -73,6 +73,15 @@ class Decision:
     leave_v3: bool   # signal: stamp v3_last_ended_at
 
 
+def _safe_speed(s: int) -> int:
+    """Clamp a possibly-bogus speed reading to the valid 0..3 range."""
+    if s < 0:
+        return 0
+    if s > 3:
+        return 3
+    return s
+
+
 def _can_bump_to(target_speed: int, i: Inputs, thr: Thresholds) -> bool:
     """True if solar surplus would cover the bump from `i.pump_speed` to `target_speed`.
 
@@ -81,7 +90,9 @@ def _can_bump_to(target_speed: int, i: Inputs, thr: Thresholds) -> bool:
     Allows the bump only if `expected_grid_after_bump < -safety_margin`
     (i.e. still exporting after the new load is picked up).
     """
-    delta_w = PUMP_W[target_speed] - PUMP_W[i.pump_speed]
+    current = _safe_speed(i.pump_speed)
+    target = _safe_speed(target_speed)
+    delta_w = PUMP_W[target] - PUMP_W[current]
     expected_grid = i.grid_w + delta_w
     return expected_grid < -thr.safety_margin_w
 

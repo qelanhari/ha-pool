@@ -32,8 +32,12 @@ A single device with these entities:
   session (or `unknown` when no session is active).
 - `sensor.pool_pump_v3_cooldown_remaining` — seconds before the next v3
   session is allowed.
+- `sensor.pool_pump_grid_smooth` — EMA-smoothed grid power that the brain
+  actually decides against (in W, `device_class: power`).
 - `button.pool_pump_force_skim` — start a v3 session right now (still
   respects cooldown and surplus availability).
+- `button.pool_pump_reset_v3_cooldown` — clear the cooldown so a fresh v3
+  session can start immediately (useful after a manual backwash).
 
 ## Speed → power table (calibrated by the user for a Hayward VSTD)
 
@@ -72,8 +76,15 @@ chilly day with surplus stays at v1 instead of dumping the surplus into
 sustained v2 with no filtration upside.
 
 A **min-dwell rate limit** (60 s by default) prevents two speed changes
-within a minute of each other. Manual mode and the force-skim button
-bypass it.
+within a minute of each other. Manual modes (`off/v1/v2/v3`), the
+force-skim button, and v3 session entry/exit bypass it. `auto` and
+`winter` always go through the rate limit.
+
+> **Note on manual `v3`:** when you pick `v3` from the mode select, you
+> override the brain entirely — including the 15-min skim cap. Manual
+> mode is sovereign, so the cap doesn't fire until you switch the mode
+> back to `auto` (or pick another manual speed). If you need a strict
+> 15-min skim, use the **Force skim now** button instead.
 
 ### Winter mode
 

@@ -48,6 +48,15 @@
           "v3_max_minutes": "Max v3 session (minutes)",
           "v3_cooldown_minutes": "Cooldown between v3 sessions (minutes)"
         }
+      },
+      "advanced": {
+        "title": "Pool Pump — advanced",
+        "description": "Anti-flap tuning and optional Tempo sensor for winter mode.",
+        "data": {
+          "solar_smooth_alpha": "Grid EMA alpha (lower = more smoothing)",
+          "min_speed_dwell_seconds": "Min time between speed changes (s)",
+          "tempo_entity": "Tempo color sensor (winter-mode Red day cut-off; leave empty to disable)"
+        }
       }
     }
   },
@@ -69,10 +78,12 @@
       "target_speed": { "name": "Target speed" },
       "decision_reason": { "name": "Decision reason" },
       "v3_session_age": { "name": "v3 session age" },
-      "v3_cooldown_remaining": { "name": "v3 cooldown remaining" }
+      "v3_cooldown_remaining": { "name": "v3 cooldown remaining" },
+      "grid_smooth": { "name": "Grid power (smoothed)" }
     },
     "button": {
-      "force_skim": { "name": "Force skim now" }
+      "force_skim": { "name": "Force skim now" },
+      "reset_v3_cooldown": { "name": "Reset v3 cooldown" }
     }
   }
 }

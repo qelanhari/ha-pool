@@ -23,15 +23,19 @@ from .const import (
     CONF_AIR_TEMP_ENTITY,
     CONF_AIR_WARM_C,
     CONF_GRID_POWER_ENTITY,
+    CONF_MIN_SPEED_DWELL_SECONDS,
     CONF_PUMP_SPEED_ENTITY,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_SMOOTH_ALPHA,
     CONF_TEMPO_ENTITY,
     CONF_V3_COOLDOWN_MINUTES,
     CONF_V3_MAX_MINUTES,
     CONF_WATER_TEMP_ENTITY,
     CONF_WATER_WARM_C,
     DEFAULT_AIR_WARM_C,
+    DEFAULT_MIN_SPEED_DWELL_SECONDS,
     DEFAULT_SAFETY_MARGIN_W,
+    DEFAULT_SOLAR_SMOOTH_ALPHA,
     DEFAULT_V3_COOLDOWN_MINUTES,
     DEFAULT_V3_MAX_MINUTES,
     DEFAULT_WATER_WARM_C,
@@ -120,6 +124,45 @@ def _v3_limits_schema(prev: dict[str, Any] | None = None) -> vol.Schema:
     )
 
 
+def _advanced_schema(prev: dict[str, Any] | None = None) -> vol.Schema:
+    """Tempo entity + anti-flap tuning. Available only in OptionsFlow.
+
+    The Tempo entity is also accepted in the initial entity step; this lets
+    the user add/change/remove it after install without recreating the entry.
+    """
+    p = prev or {}
+    fields: dict[Any, Any] = {
+        vol.Required(
+            CONF_SOLAR_SMOOTH_ALPHA,
+            default=p.get(CONF_SOLAR_SMOOTH_ALPHA, DEFAULT_SOLAR_SMOOTH_ALPHA),
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=0.05, max=1.0, step=0.05, mode=NumberSelectorMode.SLIDER
+            )
+        ),
+        vol.Required(
+            CONF_MIN_SPEED_DWELL_SECONDS,
+            default=p.get(
+                CONF_MIN_SPEED_DWELL_SECONDS, DEFAULT_MIN_SPEED_DWELL_SECONDS
+            ),
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=0, max=600, step=5, mode=NumberSelectorMode.BOX
+            )
+        ),
+    }
+    # Tempo as optional, with optional default preserving previous selection.
+    if p.get(CONF_TEMPO_ENTITY):
+        fields[
+            vol.Optional(CONF_TEMPO_ENTITY, default=p[CONF_TEMPO_ENTITY])
+        ] = EntitySelector(EntitySelectorConfig(domain="sensor"))
+    else:
+        fields[vol.Optional(CONF_TEMPO_ENTITY)] = EntitySelector(
+            EntitySelectorConfig(domain="sensor")
+        )
+    return vol.Schema(fields)
+
+
 class PoolPumpConfigFlow(ConfigFlow, domain=DOMAIN):
     """Initial setup."""
 
@@ -165,7 +208,7 @@ class PoolPumpConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class PoolPumpOptionsFlow(OptionsFlowWithConfigEntry):
-    """Edit thresholds and v3 limits after setup. Entities are pinned at install."""
+    """Edit thresholds, v3 limits, and advanced (tempo + anti-flap) after install."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -187,9 +230,23 @@ class PoolPumpOptionsFlow(OptionsFlowWithConfigEntry):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            options = {**getattr(self, "_stash", {}), **user_input}
-            return self.async_create_entry(title="", data=options)
+            self._stash = {**getattr(self, "_stash", {}), **user_input}
+            return await self.async_step_advanced()
         prev = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="v3_limits", data_schema=_v3_limits_schema(prev)
+        )
+
+    async def async_step_advanced(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            options = {**getattr(self, "_stash", {}), **user_input}
+            # Strip empty tempo selection so the brain treats it as "no Tempo".
+            if not options.get(CONF_TEMPO_ENTITY):
+                options.pop(CONF_TEMPO_ENTITY, None)
+            return self.async_create_entry(title="", data=options)
+        prev = {**self.config_entry.data, **self.config_entry.options}
+        return self.async_show_form(
+            step_id="advanced", data_schema=_advanced_schema(prev)
         )

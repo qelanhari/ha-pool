@@ -17,8 +17,10 @@ from .const import (
     CONF_AIR_TEMP_ENTITY,
     CONF_AIR_WARM_C,
     CONF_GRID_POWER_ENTITY,
+    CONF_MIN_SPEED_DWELL_SECONDS,
     CONF_PUMP_SPEED_ENTITY,
     CONF_SAFETY_MARGIN_W,
+    CONF_SOLAR_SMOOTH_ALPHA,
     CONF_TEMPO_ENTITY,
     CONF_V3_COOLDOWN_MINUTES,
     CONF_V3_MAX_MINUTES,
@@ -32,17 +34,21 @@ from .const import (
     DEFAULT_V3_MAX_MINUTES,
     DEFAULT_WATER_WARM_C,
     DOMAIN,
+    MANUAL_MODES,
     MODE_AUTO,
     UPDATE_INTERVAL_SECONDS,
 )
-from .decision import Decision, Inputs, Thresholds, decide
+from .decision import Decision, Inputs, Thresholds, _safe_speed, decide
 
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
-STORAGE_KEY = f"{DOMAIN}.state"
-
 SUN_ENTITY = "sun.sun"
+
+
+def _storage_key(entry_id: str) -> str:
+    """Per-config-entry key so multi-instance setups don't collide."""
+    return f"{DOMAIN}.{entry_id}"
 
 
 class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -58,7 +64,9 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=UPDATE_INTERVAL_SECONDS),
         )
         self.config_entry = entry
-        self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._store: Store = Store(
+            hass, STORAGE_VERSION, _storage_key(entry.entry_id)
+        )
         self._unsub_listeners: list[Any] = []
 
         self._mode: str = MODE_AUTO
@@ -71,9 +79,8 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             target_speed=1, reason="initial", enter_v3=False, leave_v3=False
         )
 
-        # Anti-flap state.
-        # _grid_smooth = EMA of the grid sensor; on first tick we seed it
-        # from the live reading so we don't start at 0 and drift up.
+        # Anti-flap state. Persisted to Store so restarts don't reset the EMA
+        # convergence and don't forget the last speed change time.
         self._grid_smooth: float | None = None
         self._last_speed_change_at: datetime | None = None
 
@@ -118,6 +125,13 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._force_skim_pending = True
         await self.async_request_refresh()
 
+    async def async_reset_v3_cooldown(self) -> None:
+        """Clear the v3 cooldown so a new v3 session can start immediately."""
+        self._v3_last_ended_at = None
+        await self._save_state()
+        _LOGGER.info("Pool pump: v3 cooldown reset by user")
+        await self.async_request_refresh()
+
     # --- Lifecycle -----------------------------------------------------------
 
     async def async_setup(self) -> None:
@@ -158,6 +172,9 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._mode = data.get("mode", MODE_AUTO)
         self._v3_started_at = _parse_iso(data.get("v3_started_at"))
         self._v3_last_ended_at = _parse_iso(data.get("v3_last_ended_at"))
+        gs = data.get("grid_smooth_w")
+        self._grid_smooth = float(gs) if gs is not None else None
+        self._last_speed_change_at = _parse_iso(data.get("last_speed_change_at"))
 
     async def _save_state(self) -> None:
         await self._store.async_save(
@@ -165,6 +182,8 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "mode": self._mode,
                 "v3_started_at": _to_iso(self._v3_started_at),
                 "v3_last_ended_at": _to_iso(self._v3_last_ended_at),
+                "grid_smooth_w": self._grid_smooth,
+                "last_speed_change_at": _to_iso(self._last_speed_change_at),
             }
         )
 
@@ -205,7 +224,13 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         grid_raw = self._get_float(self._entity(CONF_GRID_POWER_ENTITY)) or 0.0
         water = self._get_float(self._entity(CONF_WATER_TEMP_ENTITY))
         air = self._get_float(self._entity(CONF_AIR_TEMP_ENTITY))
-        pump_speed = self._get_int(pump_id, default=0)
+        pump_speed_raw = self._get_int(pump_id, default=0)
+        pump_speed = _safe_speed(pump_speed_raw)
+        if pump_speed != pump_speed_raw:
+            _LOGGER.warning(
+                "Pool pump: pump speed entity reported %d, clamped to %d",
+                pump_speed_raw, pump_speed,
+            )
 
         tempo_entity = self._entity(CONF_TEMPO_ENTITY)
         tempo_color: str | None = None
@@ -214,10 +239,11 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if t_state and t_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 tempo_color = t_state.state
 
-        # EMA smoothing on the grid sensor so a passing cloud (~30–60 s) doesn't
-        # flap the speed. First tick seeds from the live value (no smoothing
-        # offset). Manual mode also bypasses smoothing (it ignores grid anyway).
-        alpha = DEFAULT_SOLAR_SMOOTH_ALPHA
+        # EMA smoothing on grid power so a ~30–60 s cloud doesn't flap the
+        # speed. First tick after a fresh install seeds from the live value;
+        # restarts restore the smoothed value from Store so convergence
+        # persists.
+        alpha = float(self._cfg(CONF_SOLAR_SMOOTH_ALPHA, DEFAULT_SOLAR_SMOOTH_ALPHA))
         if self._grid_smooth is None:
             self._grid_smooth = grid_raw
         else:
@@ -248,30 +274,30 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         decision = decide(inputs, self.thresholds)
         self._last_decision = decision
 
-        # Stamp v3 lifecycle timestamps.
-        state_changed = False
-        if decision.enter_v3:
-            self._v3_started_at = now
-            state_changed = True
-            _LOGGER.info("Pool pump: entering v3 session — %s", decision.reason)
-        if decision.leave_v3:
-            self._v3_last_ended_at = now
-            self._v3_started_at = None
-            state_changed = True
-            _LOGGER.info("Pool pump: leaving v3 session — %s", decision.reason)
-        if state_changed:
-            await self._save_state()
+        # Rate limit: who bypasses?
+        #   - manual modes (off/v1/v2/v3) — user is sovereign, immediate effect
+        #   - force-skim button — one-shot user-initiated, should fire now
+        #   - v3 entry / exit — capping the high-flow window is more important
+        #     than smoothing the transition
+        # `auto` and `winter` modes go through the rate limit.
+        bypass = (
+            self._mode in MANUAL_MODES
+            or force_skim
+            or decision.enter_v3
+            or decision.leave_v3
+        )
 
-        # Apply target speed if it differs from current — subject to the
-        # min-dwell rate limit. Manual mode and the force-skim button bypass.
+        applied = False
         if pump_id and decision.target_speed != pump_speed:
-            bypass = self._mode != MODE_AUTO or force_skim
+            dwell = float(
+                self._cfg(CONF_MIN_SPEED_DWELL_SECONDS, DEFAULT_MIN_SPEED_DWELL_SECONDS)
+            )
             elapsed = (
                 (now - self._last_speed_change_at).total_seconds()
                 if self._last_speed_change_at
                 else float("inf")
             )
-            if bypass or elapsed >= DEFAULT_MIN_SPEED_DWELL_SECONDS:
+            if bypass or elapsed >= dwell:
                 _LOGGER.info(
                     "Pool pump: %d → %d (%s) | grid_raw=%.0fW grid_smooth=%.0fW",
                     pump_speed, decision.target_speed, decision.reason,
@@ -284,13 +310,35 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     blocking=True,
                 )
                 self._last_speed_change_at = now
+                applied = True
             else:
                 _LOGGER.debug(
-                    "Pool pump: rate-limited (%.0fs < %ds), holding at v%d "
+                    "Pool pump: rate-limited (%.0fs < %.0fs), holding at v%d "
                     "(wanted v%d, %s)",
-                    elapsed, DEFAULT_MIN_SPEED_DWELL_SECONDS,
+                    elapsed, dwell,
                     pump_speed, decision.target_speed, decision.reason,
                 )
+
+        # Stamp v3 lifecycle timestamps only AFTER the write succeeded (or was
+        # bypassed). This avoids stamping a started_at when the rate limit
+        # blocked the actual transition.
+        state_changed_v3 = False
+        if applied and decision.enter_v3:
+            self._v3_started_at = now
+            state_changed_v3 = True
+            _LOGGER.info("Pool pump: v3 session started — %s", decision.reason)
+        if applied and decision.leave_v3:
+            self._v3_last_ended_at = now
+            self._v3_started_at = None
+            state_changed_v3 = True
+            _LOGGER.info("Pool pump: v3 session ended — %s", decision.reason)
+
+        # Persist anti-flap state every cycle (cheap; matches pergola pattern)
+        # so restarts don't lose the EMA convergence or last-change timestamp.
+        await self._save_state()
+        if state_changed_v3:
+            # already saved above; nothing extra to do
+            pass
 
         return self._build_data(inputs, decision)
 
@@ -315,6 +363,7 @@ class PoolPumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "grid_smooth_w": (
                 round(self._grid_smooth, 0) if self._grid_smooth is not None else None
             ),
+            "grid_raw_w": round(inputs.grid_w, 0),  # smoothed grid actually used
         }
 
 

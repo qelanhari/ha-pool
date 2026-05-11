@@ -384,6 +384,21 @@ class TestWinterMode:
         assert d.target_speed == 1   # at most v1 in winter
 
 
+class TestSpeedClamping:
+    """A bogus `pump_speed` reading should not crash _can_bump_to."""
+
+    def test_clamps_overflow(self, base_inputs, thr):
+        # pump_speed=99 → clamped to 3 → from-v3 bump-to-v3 (delta=0)
+        # grid -1500 + 0 < -200 → allowed (we're "at v3" already).
+        d = decide(replace(base_inputs, pump_speed=99, grid_w=-1500.0), thr)
+        # No crash is the assertion. Output should be deterministic too:
+        assert d.target_speed in (1, 2, 3)
+
+    def test_clamps_negative(self, base_inputs, thr):
+        d = decide(replace(base_inputs, pump_speed=-1, grid_w=0.0), thr)
+        assert d.target_speed in (0, 1)
+
+
 class TestMissingTemps:
     def test_missing_both_temps_blocks_v3(self, base_inputs, thr):
         d = decide(

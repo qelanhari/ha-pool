@@ -7,6 +7,10 @@ DOMAIN = "pool_pump"
 # Platforms
 PLATFORMS: list[str] = ["select", "sensor", "button"]
 
+# Manual override modes (sovereign — bypass anti-flap rate limit).
+# `auto` and `winter` are auto-modes that DO respect the rate limit.
+MANUAL_MODES: frozenset[str] = frozenset({"off", "v1", "v2", "v3"})
+
 # Config keys — Step 1: entities
 CONF_PUMP_SPEED_ENTITY = "pump_speed_entity"
 CONF_GRID_POWER_ENTITY = "grid_power_entity"
@@ -22,6 +26,10 @@ CONF_AIR_WARM_C = "air_warm_c"
 # Config keys — Step 3: v3 session limits
 CONF_V3_MAX_MINUTES = "v3_max_minutes"
 CONF_V3_COOLDOWN_MINUTES = "v3_cooldown_minutes"
+
+# Config keys — Step 4 (advanced): anti-flap tuning
+CONF_SOLAR_SMOOTH_ALPHA = "solar_smooth_alpha"
+CONF_MIN_SPEED_DWELL_SECONDS = "min_speed_dwell_seconds"
 
 # Defaults
 DEFAULT_SAFETY_MARGIN_W = 200.0
@@ -68,6 +76,8 @@ __all__ = [
     "CONF_AIR_WARM_C",
     "CONF_V3_MAX_MINUTES",
     "CONF_V3_COOLDOWN_MINUTES",
+    "CONF_SOLAR_SMOOTH_ALPHA",
+    "CONF_MIN_SPEED_DWELL_SECONDS",
     "DEFAULT_SAFETY_MARGIN_W",
     "DEFAULT_WATER_WARM_C",
     "DEFAULT_AIR_WARM_C",
